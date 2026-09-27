@@ -32,3 +32,4 @@ clean:
 	$(MAKE) -C user clean
 	$(MAKE) -C image clean
 	$(MAKE) -C examples clean
+	@if [ -f tests/hw2/Makefile ]; then $(MAKE) -C tests/hw2 clean; fi
