@@ -98,39 +98,32 @@ void uart_irq_handler(void) {
 }
 
 /*
- * uart_getc - read one byte from the ring buffer (blocking)
+ * uart_getc - remove and return one byte from the RX ring buffer (blocking)
  *
- * Spins until a byte is available (head != tail), then reads it.
+ * Busy-waits until the IRQ handler has queued a byte. This is a
+ * single-producer / single-consumer queue: the IRQ handler only writes
+ * head, and this function only writes tail. Both indices are volatile so
+ * the spin loop re-reads head on every iteration instead of caching it.
  *
- * Critical section: we disable interrupts around the actual buffer
- * read and tail update. This prevents a race condition where the IRQ
- * fires between reading the byte and updating tail, potentially
- * corrupting the buffer state.
+ * IRQs are disabled around the dequeue as a defensive measure, following
+ * the course rule that shared state is accessed with interrupts masked.
+ * With a single producer and consumer the dequeue would be safe without
+ * it, but the critical section keeps the invariant simple if the buffer
+ * logic later changes (e.g. multiple readers, or overflow accounting).
  *
- * cpsid i = disable IRQ interrupts (ARM instruction)
- * cpsie i = re-enable IRQ interrupts
+ * Limitation: cpsie unconditionally re-enables IRQs, so this must not be
+ * called from a context that already has IRQs disabled.
  *
- * Future: replace the spin loop with a scheduler sleep call once
- * scheduling is implemented, so the CPU can do other work while waiting.
+ * Future: replace the busy-wait with a scheduler sleep/wakeup.
  */
-
 char uart_getc(void) {
-
-    /* busy-wait until IRQ handler has put something in the buffer */
-    while (uart_buf_head == uart_buf_tail){
-
-        if (MINEMU_UART0->status & MINEMU_UART_STATUS_RX_READY){
-            uart_irq_handler();
-        }
+    while (uart_buf_head == uart_buf_tail) {
+        /* wait for uart_irq_handler to enqueue a byte */
     }
-    /* begin critical section: disable interrupts */
+
     __asm__ volatile("cpsid i" : : : "memory");
-
     char c = uart_buf[uart_buf_tail];
-    /* advance tail, wrapping around at UART_BUF_SIZE */
     uart_buf_tail = (uart_buf_tail + 1) % UART_BUF_SIZE;
-
-    /* end critical section: re-enable interrupts */
     __asm__ volatile("cpsie i" : : : "memory");
 
     return c;

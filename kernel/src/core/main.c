@@ -83,11 +83,13 @@ struct minemu_trap_frame *minemu_irq_dispatch(struct minemu_trap_frame *frame) {
  * directly calling uart functions.
  */
 static void run_msh(void) {
-    char line[LINE_MAX + 1]; /* +1 for safety, though we null terminate manually */
+    char line[LINE_MAX];     /* not null-terminated; len tracks the valid bytes */
     int len = 0;             /* current number of chars in line buffer */
     bool overflow = false;   /* true if line exceeded LINE_MAX */
 
-    /* print initial prompt */
+    /* Task 1: boot banner, printed once after boot-info validation */
+    uart_puts("hello world\n");
+
     uart_puts("msh> ");
 
     for (;;) {
@@ -105,11 +107,11 @@ static void run_msh(void) {
         }
 
         /*
-         * Handle newline: process the current line buffer.
-         * \n is the only line terminator per assignment spec.
+         * Line terminator. Per the spec, only '\n' ends a line;
+         * '\r' is treated as an ordinary character.
          */
-        /* accept both \n and \r in case terminal sends CR instead of LF */
-        if (c == '\n' || c =='\r') {
+        
+        if (c == '\n') {
             uart_putc('\n');
 
             if (!overflow) {
@@ -201,7 +203,7 @@ void minemu_kernel_main(const struct minemu_boot_info *boot_info) {
      */
     irq_handlers[MINEMU_IRQ_UART0] = uart_irq_handler;
 
-    
+    /* Only one IRQ source is enabled, so priority is irrelevant for now. */
     MINEMU_INTERRUPT->priority_uart0 = 1;
     /*
      * Enable UART0 RX interrupt generation.

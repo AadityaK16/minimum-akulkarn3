@@ -6,6 +6,8 @@
 .type minemu_irq_trampoline, %function
 .extern minemu_irq_dispatch
 
+/* Adapted from examples/irq-context-switch/irq.S */
+
 minemu_irq_trampoline:
     sub sp, sp, #88
     stmia sp, {r0-r12}
