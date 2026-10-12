@@ -128,3 +128,14 @@ char uart_getc(void) {
 
     return c;
 }
+
+int uart_try_getc(char *out){
+
+    if(uart_buf_head == uart_buf_tail){
+        return 0;
+    }
+
+    *out = uart_buf[uart_buf_tail];
+    uart_buf_tail = (uart_buf_tail + 1) % UART_BUF_SIZE;
+    return 1;
+}

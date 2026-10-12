@@ -5,6 +5,8 @@
 #include "minemu/trace.h"
 #include "minemu/platform.h"
 #include "minemu/irq.h"
+#include "loader.h"
+void minemu_enter_user(uint32_t entry_vaddr, uint32_t stack_top) __attribute__((noreturn));
 
 /*
  * Forward declarations for functions defined in uart.c
@@ -82,13 +84,15 @@ struct minemu_trap_frame *minemu_irq_dispatch(struct minemu_trap_frame *frame) {
  * program that talks to the kernel via syscalls instead of
  * directly calling uart functions.
  */
+
+#if 0
 static void run_msh(void) {
     char line[LINE_MAX];     /* not null-terminated; len tracks the valid bytes */
     int len = 0;             /* current number of chars in line buffer */
     bool overflow = false;   /* true if line exceeded LINE_MAX */
 
-    /* Task 1: boot banner, printed once after boot-info validation */
-    uart_puts("hello world\n");
+    
+    
 
     uart_puts("msh> ");
 
@@ -171,6 +175,7 @@ static void run_msh(void) {
         }
     }
 }
+#endif
 
 /*
  * minemu_kernel_main - kernel entry point, called by bootloader
@@ -228,6 +233,21 @@ void minemu_kernel_main(const struct minemu_boot_info *boot_info) {
      */
     __asm__ volatile("cpsie i" : : : "memory");
 
-    /* enter the shell - never returns */
-    run_msh();
+    static const char module_name[] = "minimum-user";
+
+    if(!map_system_rom(boot_info)) {
+        minemu_trace_event(UINT32_C(0xb007bd1));
+        minemu_fail_stop();
+    }
+
+    const struct minemu_module_record *module = 
+        find_module(boot_info, module_name, sizeof(module_name) - 1U);
+
+        if (module == NULL || !load_user_module(boot_info, module)){
+            minemu_trace_event(UINT32_C(0x007bad2));
+            minemu_fail_stop();
+        }
+    
+    minemu_enter_user(module->entry_vaddr, USER_STACK_TOP);
+    
 }
