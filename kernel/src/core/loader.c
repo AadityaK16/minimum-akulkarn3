@@ -17,12 +17,19 @@
 #include "loader.h"
 
 
+/*
+ * Sized for this assignment's small programs. The example used 16 pages and
+ * 4 tables, but these arrays are zero-initialised, so the bootloader clears
+ * them byte by byte at boot; the extra 76 KB pushed msh past the msh-prompt
+ * tick budget. 4 pages = 16 KB per program (msh uses 1); 1 table maps 4 MB.
+ */
+
+#define MAX_USER_IMAGE_PAGES 4U
+#define SYSTEM_ROM_TABLE_COUNT 1U
 #define BOOTSTRAP_PAGE_DIRECTORY_PADDR UINT32_C(0x40010000)
 #define USER_IMAGE_BASE UINT32_C(0x00400000)
 #define USER_STACK_BOTTOM UINT32_C(0x007ff000)
 #define USER_STACK_TOP UINT32_C(0x00800000)
-#define MAX_USER_IMAGE_PAGES 16U
-#define SYSTEM_ROM_TABLE_COUNT 4U
 #define CPSR_MODE_MASK UINT32_C(0x1f)
 #define CPSR_MODE_USR UINT32_C(0x10)
 #define CPSR_THUMB UINT32_C(0x20)

@@ -85,103 +85,13 @@ struct minemu_trap_frame *minemu_irq_dispatch(struct minemu_trap_frame *frame) {
  * directly calling uart functions.
  */
 
-#if 0
-static void run_msh(void) {
-    char line[LINE_MAX];     /* not null-terminated; len tracks the valid bytes */
-    int len = 0;             /* current number of chars in line buffer */
-    bool overflow = false;   /* true if line exceeded LINE_MAX */
-
-    
-    
-
-    uart_puts("msh> ");
-
-    for (;;) {
-        /* blocking read - waits for IRQ handler to put a byte in the buffer */
-        char c = uart_getc();
-
-        /*
-         * Handle backspace: 0x08 (BS) and 0x7f (DEL) both mean backspace.
-         * If line is empty, ignore. Otherwise remove last character.
-         * The TUI mirrors backspace automatically so no erase sequence needed.
-         */
-        if (c == 0x08 || c == 0x7f) {
-            if (len > 0) len--;
-            continue;
-        }
-
-        /*
-         * Line terminator. Per the spec, only '\n' ends a line;
-         * '\r' is treated as an ordinary character.
-         */
-        
-        if (c == '\n') {
-            uart_putc('\n');
-
-            if (!overflow) {
-                /* skip leading spaces */
-                int i = 0;
-                while (i < len && line[i] == ' ') i++;
-
-                if (i == len) {
-                    /*
-                     * Empty line or all spaces: do nothing, just reprint prompt.
-                     * Assignment says treat as empty command.
-                     */
-                } else if (len - i >= 4 &&
-                           line[i]   == 'e' &&
-                           line[i+1] == 'c' &&
-                           line[i+2] == 'h' &&
-                           line[i+3] == 'o' &&
-                           (i + 4 == len || line[i+4] == ' ')) {
-                    /*
-                     * echo command: print everything after "echo",
-                     * skipping the single separator space (and any repeated spaces).
-                     * echo with no argument prints an empty line.
-                     */
-                    int j = i + 4; /* skip past "echo" */
-                    while (j < len && line[j] == ' ') j++; /* skip spaces */
-                    for (int k = j; k < len; k++) uart_putc(line[k]);
-                    uart_putc('\n');
-                } else {
-                    /*
-                     * Unknown command: print "command not found: COMMAND"
-                     * where COMMAND is the first space-delimited word.
-                     */
-                    uart_puts("command not found: ");
-                    int j = i;
-                    while (j < len && line[j] != ' ') uart_putc(line[j++]);
-                    uart_putc('\n');
-                }
-            }
-            /* overflow lines are silently discarded - just reprint prompt */
-
-            /* reset line buffer for next command */
-            len = 0;
-            overflow = false;
-            uart_puts("msh> ");
-            continue;
-        }
-
-        /*
-         * Normal character: add to line buffer if space available.
-         * If buffer is full, set overflow flag and discard character.
-         * We continue reading until newline so the user can finish typing.
-         */
-        if (len < LINE_MAX) {
-            line[len++] = c;
-        } else {
-            overflow = true;
-        }
-    }
-}
-#endif
 
 /*
- * minemu_kernel_main - kernel entry point, called by bootloader
+ * minemu_kernel_main - kernel entry point, called by the bootloader.
  *
- * Validates boot info, sets up UART interrupts, enables IRQs,
- * then enters the shell loop. Never returns.
+ * Validates boot info, enables UART0 receive interrupts, loads the
+ * "minimum-user" module (the msh shell) from the system image, and
+ * drops to user mode at its entry point. Never returns.
  */
 void minemu_kernel_main(const struct minemu_boot_info *boot_info) {
     /*
@@ -233,10 +143,11 @@ void minemu_kernel_main(const struct minemu_boot_info *boot_info) {
      */
     __asm__ volatile("cpsie i" : : : "memory");
 
+    /* Load the user shell and enter user mode; any failure is fatal. */
     static const char module_name[] = "minimum-user";
 
     if(!map_system_rom(boot_info)) {
-        minemu_trace_event(UINT32_C(0xb007bd1));
+        minemu_trace_event(UINT32_C(0xb007bad1));
         minemu_fail_stop();
     }
 
@@ -244,7 +155,7 @@ void minemu_kernel_main(const struct minemu_boot_info *boot_info) {
         find_module(boot_info, module_name, sizeof(module_name) - 1U);
 
         if (module == NULL || !load_user_module(boot_info, module)){
-            minemu_trace_event(UINT32_C(0x007bad2));
+            minemu_trace_event(UINT32_C(0xb007bad2));
             minemu_fail_stop();
         }
     
